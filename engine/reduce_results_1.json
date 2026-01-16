@@ -1,0 +1,182 @@
+[
+  {
+    "genre": "blues",
+    "avg_duration_minutes": 3.71,
+    "top_artist": "Ella Fitzgerald",
+    "total_tracks_processed": 1000
+  },
+  {
+    "genre": "chicago-house",
+    "avg_duration_minutes": 6.11,
+    "top_artist": "Paul Johnson",
+    "total_tracks_processed": 1000
+  },
+  {
+    "genre": "country",
+    "avg_duration_minutes": 3.43,
+    "top_artist": "Zach Bryan",
+    "total_tracks_processed": 1000
+  },
+  {
+    "genre": "dancehall",
+    "avg_duration_minutes": 3.29,
+    "top_artist": "Burna Boy",
+    "total_tracks_processed": 1000
+  },
+  {
+    "genre": "death-metal",
+    "avg_duration_minutes": 4.12,
+    "top_artist": "Gojira",
+    "total_tracks_processed": 1000
+  },
+  {
+    "genre": "detroit-techno",
+    "avg_duration_minutes": 6.2,
+    "top_artist": "Inner City",
+    "total_tracks_processed": 1000
+  },
+  {
+    "genre": "drum-and-bass",
+    "avg_duration_minutes": 4.65,
+    "top_artist": "Pendulum",
+    "total_tracks_processed": 1000
+  },
+  {
+    "genre": "dub",
+    "avg_duration_minutes": 3.86,
+    "top_artist": "BaianaSystem",
+    "total_tracks_processed": 1000
+  },
+  {
+    "genre": "folk",
+    "avg_duration_minutes": 4.4,
+    "top_artist": "Prateek Kuhad",
+    "total_tracks_processed": 1000
+  },
+  {
+    "genre": "french",
+    "avg_duration_minutes": 3.46,
+    "top_artist": "Indila",
+    "total_tracks_processed": 1000
+  },
+  {
+    "genre": "guitar",
+    "avg_duration_minutes": 3.54,
+    "top_artist": "Little Symphony",
+    "total_tracks_processed": 1000
+  },
+  {
+    "genre": "happy",
+    "avg_duration_minutes": 4.03,
+    "top_artist": "Scooter",
+    "total_tracks_processed": 1000
+  },
+  {
+    "genre": "hardstyle",
+    "avg_duration_minutes": 3.76,
+    "top_artist": "The Prophet",
+    "total_tracks_processed": 1000
+  },
+  {
+    "genre": "indian",
+    "avg_duration_minutes": 4.09,
+    "top_artist": "Pritam;Arijit Singh",
+    "total_tracks_processed": 1000
+  },
+  {
+    "genre": "indie-pop",
+    "avg_duration_minutes": 3.43,
+    "top_artist": "salem ilese",
+    "total_tracks_processed": 1000
+  },
+  {
+    "genre": "j-rock",
+    "avg_duration_minutes": 4.08,
+    "top_artist": "Mr.Children",
+    "total_tracks_processed": 1000
+  },
+  {
+    "genre": "jazz",
+    "avg_duration_minutes": 3.17,
+    "top_artist": "Ella Fitzgerald",
+    "total_tracks_processed": 1000
+  },
+  {
+    "genre": "latino",
+    "avg_duration_minutes": 3.5,
+    "top_artist": "Feid",
+    "total_tracks_processed": 1000
+  },
+  {
+    "genre": "metal",
+    "avg_duration_minutes": 4.27,
+    "top_artist": "Linkin Park",
+    "total_tracks_processed": 1000
+  },
+  {
+    "genre": "minimal-techno",
+    "avg_duration_minutes": 6.15,
+    "top_artist": "Boris Brejcha",
+    "total_tracks_processed": 1000
+  },
+  {
+    "genre": "piano",
+    "avg_duration_minutes": 3.4,
+    "top_artist": "OneRepublic",
+    "total_tracks_processed": 1000
+  },
+  {
+    "genre": "pop",
+    "avg_duration_minutes": 3.68,
+    "top_artist": "Justin Bieber",
+    "total_tracks_processed": 1000
+  },
+  {
+    "genre": "progressive-house",
+    "avg_duration_minutes": 3.45,
+    "top_artist": "Armin van Buuren",
+    "total_tracks_processed": 1000
+  },
+  {
+    "genre": "rock-n-roll",
+    "avg_duration_minutes": 2.89,
+    "top_artist": "Elvis Presley",
+    "total_tracks_processed": 1000
+  },
+  {
+    "genre": "rock",
+    "avg_duration_minutes": 3.66,
+    "top_artist": "The Beach Boys",
+    "total_tracks_processed": 1000
+  },
+  {
+    "genre": "rockabilly",
+    "avg_duration_minutes": 2.87,
+    "top_artist": "Elvis Presley",
+    "total_tracks_processed": 1000
+  },
+  {
+    "genre": "sad",
+    "avg_duration_minutes": 2.56,
+    "top_artist": "Ollie",
+    "total_tracks_processed": 1000
+  },
+  {
+    "genre": "salsa",
+    "avg_duration_minutes": 4.61,
+    "top_artist": "Maelo Ruiz",
+    "total_tracks_processed": 1000
+  },
+  {
+    "genre": "swedish",
+    "avg_duration_minutes": 3.49,
+    "top_artist": "ABBA",
+    "total_tracks_processed": 1000
+  },
+  {
+    "genre": "synth-pop",
+    "avg_duration_minutes": 4.08,
+    "top_artist": "Tove Lo",
+    "total_tracks_processed": 1000
+  }
+]
