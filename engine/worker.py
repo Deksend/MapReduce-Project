@@ -1,4 +1,5 @@
 # engine/worker.py
+import importlib
 import socket
 import threading
 import json
@@ -8,7 +9,17 @@ import hashlib
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from utils import load_config
-from user_app import map_function, reduce_function # Φέραμε και το reduce!
+
+# Dynamic import based on problem selection
+# Default to problem 1 (teammate's), can be overridden via CLI
+PROBLEM_MODULE = "user_app"  # Default
+def load_problem_module(problem_name):
+    """Dynamically load map/reduce functions from specified module"""
+    global map_function, reduce_function
+    module = importlib.import_module(problem_name)
+    map_function = module.map_function
+    reduce_function = module.reduce_function
+    print(f"[WORKER] Loaded problem module: {problem_name}")
 
 # Global list για να μαζεύουμε τα δεδομένα που μας στέλνουν οι άλλοι
 incoming_shuffle_data = []
@@ -46,7 +57,10 @@ def start_worker_server(my_ip, my_port):
         t = threading.Thread(target=handle_peer_connection, args=(conn, addr))
         t.start()
 
-def start_worker(worker_id):
+def start_worker(worker_id, problem_module="user_app"):
+    # Load the appropriate problem module
+    load_problem_module(problem_module)
+
     config = load_config()
     my_config = config['worker_nodes'][worker_id - 1]
     
@@ -177,4 +191,13 @@ def start_worker(worker_id):
             break
 
 if __name__ == "__main__":
-    start_worker(int(sys.argv[1]))
+    # Usage: python worker.py <worker_id> [problem_module]
+    # Examples:
+    #   python worker.py 1                    -> runs with user_app (problem 1)
+    #   python worker.py 1 user_app           -> runs with user_app (problem 1)
+    #   python worker.py 1 user_app_problem2  -> runs with user_app_problem2 (problem 2)
+
+    worker_id = int(sys.argv[1])
+    problem_module = sys.argv[2] if len(sys.argv) > 2 else "user_app"
+
+    start_worker(worker_id, problem_module)
