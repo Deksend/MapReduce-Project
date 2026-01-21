@@ -6,14 +6,35 @@ Author: [Your Name]
 For each genre, count the total number of tracks and how many have explicit lyrics,
 then compute the fraction of explicit tracks.
 
-MapReduce Steps:
-1. Map: Emit (genre, (1, explicit_flag)) for each track
-2. Shuffle: Group all values by genre key (handled by engine)
-3. Reduce: Sum counts and compute explicit ratio
+Optional Feature:
+  --popularity    Include average popularity comparison (explicit vs non-explicit)
+
+Usage:
+  python engine/worker.py 1 user_app_problem2                # basic
+  python engine/worker.py 1 user_app_problem2 --popularity   # with popularity analysis
 """
 
 import csv
 import io
+
+# --- FEATURE FLAG ---
+POPULARITY_ENABLED = False
+
+
+def configure_features(args):
+    """Parse CLI arguments to enable optional features"""
+    global POPULARITY_ENABLED
+    
+    if args is None:
+        args = []
+    
+    print(f"[PROBLEM 2] Configuring with args: {args}")
+    
+    if "--popularity" in args:
+        POPULARITY_ENABLED = True
+        print("[PROBLEM 2] Optional feature enabled: popularity analysis")
+    else:
+        print("[PROBLEM 2] Running with basic features only")
 
 
 # --- 1. MAP FUNCTION ---
@@ -22,28 +43,16 @@ def map_function(document_line):
     Input: A single CSV line (string)
     Output: List of (Key, Value) tuples
     
-    Key: genre (string)
-    Value: dict with track_count and explicit_count
-    
-    CSV columns (based on dataset.csv):
-    Index 0: row_number
-    Index 1: track_id
-    Index 2: artists
-    Index 3: album_name
-    Index 4: track_name
+    CSV columns:
     Index 5: popularity
-    Index 6: duration_ms
     Index 7: explicit (True/False)
-    Index 8-19: audio features
     Index 20: track_genre
     """
     try:
-        # Use csv module to properly handle quoted fields
         f = io.StringIO(document_line)
         reader = csv.reader(f, delimiter=',')
         row = next(reader)
 
-        # Check if row has enough columns
         if len(row) < 21:
             return []
 
@@ -51,24 +60,40 @@ def map_function(document_line):
         if row[7] == 'explicit':
             return []
 
-        # Extract relevant fields
-        explicit_str = row[7].strip()  # "True" or "False"
-        genre = row[20].strip()        # Genre is our key
-
-        # Convert explicit to flag (1 if explicit, 0 otherwise)
+        # Extract required fields
+        genre = row[20].strip()
+        explicit_str = row[7].strip()
         explicit_flag = 1 if explicit_str.lower() == 'true' else 0
 
-        # Value is a dict with counts for easy aggregation
+        # Base value data
         value_data = {
             "track_count": 1,
-            "explicit_count": explicit_flag
+            "explicit_count": explicit_flag,
         }
 
-        # Return: Key -> genre, Value -> {track_count, explicit_count}
+        # --- OPTIONAL: Popularity analysis ---
+        if POPULARITY_ENABLED:
+            try:
+                popularity = int(row[5])
+                if explicit_flag:
+                    value_data["explicit_popularity_sum"] = popularity
+                    value_data["explicit_popularity_count"] = 1
+                    value_data["clean_popularity_sum"] = 0
+                    value_data["clean_popularity_count"] = 0
+                else:
+                    value_data["explicit_popularity_sum"] = 0
+                    value_data["explicit_popularity_count"] = 0
+                    value_data["clean_popularity_sum"] = popularity
+                    value_data["clean_popularity_count"] = 1
+            except:
+                value_data["explicit_popularity_sum"] = 0
+                value_data["explicit_popularity_count"] = 0
+                value_data["clean_popularity_sum"] = 0
+                value_data["clean_popularity_count"] = 0
+
         return [(genre, value_data)]
 
     except Exception as e:
-        # Skip malformed lines
         return []
 
 
@@ -76,33 +101,63 @@ def map_function(document_line):
 def reduce_function(key, values_list):
     """
     Input:
-      key: Genre name (e.g., "pop", "rock", "acoustic")
-      values_list: List of dicts with track_count and explicit_count
+      key: Genre name
+      values_list: List of dicts with track data
       
     Output:
       Dict with genre statistics
     """
     total_tracks = 0
     explicit_tracks = 0
+    
+    # Popularity accumulators
+    explicit_pop_sum = 0
+    explicit_pop_count = 0
+    clean_pop_sum = 0
+    clean_pop_count = 0
 
     for item in values_list:
         total_tracks += item['track_count']
         explicit_tracks += item['explicit_count']
+        
+        # --- OPTIONAL: Popularity ---
+        if POPULARITY_ENABLED and "explicit_popularity_sum" in item:
+            explicit_pop_sum += item.get("explicit_popularity_sum", 0)
+            explicit_pop_count += item.get("explicit_popularity_count", 0)
+            clean_pop_sum += item.get("clean_popularity_sum", 0)
+            clean_pop_count += item.get("clean_popularity_count", 0)
 
     if total_tracks == 0:
         return None
 
-    # Calculate explicit ratio
+    # --- BUILD RESULT ---
     explicit_ratio = explicit_tracks / total_tracks
-    explicit_percentage = round(explicit_ratio * 100, 2)
-
+    
     result = {
         "genre": key,
         "total_tracks": total_tracks,
         "explicit_tracks": explicit_tracks,
         "explicit_ratio": round(explicit_ratio, 4),
-        "explicit_percentage": explicit_percentage
+        "explicit_percentage": round(explicit_ratio * 100, 2),
     }
+
+    # --- OPTIONAL: Popularity stats ---
+    if POPULARITY_ENABLED:
+        if explicit_pop_count > 0:
+            result["avg_popularity_explicit"] = round(explicit_pop_sum / explicit_pop_count, 2)
+        else:
+            result["avg_popularity_explicit"] = None
+            
+        if clean_pop_count > 0:
+            result["avg_popularity_clean"] = round(clean_pop_sum / clean_pop_count, 2)
+        else:
+            result["avg_popularity_clean"] = None
+        
+        # Difference: positive = explicit more popular
+        if result["avg_popularity_explicit"] and result["avg_popularity_clean"]:
+            result["popularity_diff"] = round(
+                result["avg_popularity_explicit"] - result["avg_popularity_clean"], 2
+            )
 
     return result
 
@@ -113,30 +168,36 @@ if __name__ == "__main__":
     print("Problem 2: Per-Genre Explicit Lyrics Statistics")
     print("=" * 60)
     
-    print("\n--- Testing Map Function ---")
+    # Test with popularity enabled
+    print("\n[Testing with --popularity enabled]\n")
+    POPULARITY_ENABLED = True
     
-    # Test with explicit=False track
-    sample_line_1 = '0,5SuOikwiRyPMVoIQDJUgSV,Gen Hoshino,Comedy,Comedy,73,230666,False,0.676,0.461,1,-6.746,0,0.143,0.0322,1.01e-06,0.358,0.715,87.917,4,acoustic'
-    mapped_1 = map_function(sample_line_1)
-    print(f"Line 1 (explicit=False): {mapped_1}")
-    
-    # Test with explicit=True track
-    sample_line_2 = '1,ABC123,Eminem,Album,Song,85,180000,True,0.8,0.9,5,-4.5,1,0.2,0.01,0.0,0.1,0.6,120.0,4,hip-hop'
-    mapped_2 = map_function(sample_line_2)
-    print(f"Line 2 (explicit=True):  {mapped_2}")
-    
-    print("\n--- Testing Reduce Function ---")
-    
-    sample_values = [
-        {"track_count": 1, "explicit_count": 0},
-        {"track_count": 1, "explicit_count": 1},
-        {"track_count": 1, "explicit_count": 1},
-        {"track_count": 1, "explicit_count": 0},
-        {"track_count": 1, "explicit_count": 1},
+    sample_lines = [
+        '0,ID1,Artist1,Album,Song,73,230666,False,0.6,0.4,1,-6.7,0,0.1,0.03,0.0,0.3,0.7,87.9,4,pop',
+        '1,ID2,Artist2,Album,Song,95,180000,True,0.8,0.9,5,-4.5,1,0.2,0.01,0.0,0.1,0.6,120.0,4,pop',
+        '2,ID3,Artist3,Album,Song,88,200000,True,0.7,0.7,3,-5.0,1,0.1,0.02,0.0,0.2,0.7,110.0,4,pop',
+        '3,ID4,Artist4,Album,Song,60,210000,False,0.6,0.6,2,-6.0,1,0.1,0.03,0.0,0.1,0.8,100.0,4,rock',
     ]
-    reduced = reduce_function("pop", sample_values)
-    print(f"Result: {reduced}")
+    
+    all_mapped = []
+    for line in sample_lines:
+        mapped = map_function(line)
+        all_mapped.extend(mapped)
+    
+    # Group by genre
+    grouped = {}
+    for genre, value in all_mapped:
+        if genre not in grouped:
+            grouped[genre] = []
+        grouped[genre].append(value)
+    
+    print("Results:")
+    for genre, values in grouped.items():
+        result = reduce_function(genre, values)
+        print(f"\n{genre}: {result}")
     
     print("\n" + "=" * 60)
-    print("Tests passed!")
+    print("Usage:")
+    print("  python worker.py 1 user_app_problem2              # basic")
+    print("  python worker.py 1 user_app_problem2 --popularity # + popularity")
     print("=" * 60)

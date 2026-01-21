@@ -1,11 +1,11 @@
 # engine/worker.py
-import importlib
 import socket
 import threading
 import json
 import sys
 import os
 import hashlib
+import importlib
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from utils import load_config
@@ -13,20 +13,28 @@ from utils import load_config
 # Dynamic import based on problem selection
 # Default to problem 1 (teammate's), can be overridden via CLI
 PROBLEM_MODULE = "user_app"  # Default
-def load_problem_module(problem_name):
+
+def load_problem_module(problem_name, extra_args=None):
     """Dynamically load map/reduce functions from specified module"""
     global map_function, reduce_function
     module = importlib.import_module(problem_name)
+    
+    print(f"[WORKER] Extra args received: {extra_args}")
+    
+    # If module has configure_features function, call it with extra args
+    if hasattr(module, 'configure_features'):
+        module.configure_features(extra_args if extra_args else [])
+    
     map_function = module.map_function
     reduce_function = module.reduce_function
     print(f"[WORKER] Loaded problem module: {problem_name}")
 
-# Global list για να μαζεύουμε τα δεδομένα που μας στέλνουν οι άλλοι
+# Global list to collect shuffled data from other workers
 incoming_shuffle_data = []
 lock = threading.Lock()
 
 def handle_peer_connection(conn, addr):
-    """Δέχεται δεδομένα από ΑΛΛΟΝ Worker (P2P)"""
+    """Receives data from OTHER Worker (P2P)"""
     print(f"[WORKER SERVER] Receiving data from peer {addr}")
     buffer = ""
     try:
@@ -35,7 +43,7 @@ def handle_peer_connection(conn, addr):
             if not chunk: break
             buffer += chunk
             
-        # Μόλις κλείσει η σύνδεση, αποθηκεύουμε τα δεδομένα
+        # When connection closes, store the data
         data = json.loads(buffer)
         with lock:
             incoming_shuffle_data.extend(data)
@@ -47,7 +55,7 @@ def handle_peer_connection(conn, addr):
         conn.close()
 
 def start_worker_server(my_ip, my_port):
-    """Ανοίγει πόρτα για να ακούει άλλους Workers"""
+    """Opens port to listen for other Workers"""
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server.bind((my_ip, my_port))
     server.listen()
@@ -57,14 +65,14 @@ def start_worker_server(my_ip, my_port):
         t = threading.Thread(target=handle_peer_connection, args=(conn, addr))
         t.start()
 
-def start_worker(worker_id, problem_module="user_app"):
-    # Load the appropriate problem module
-    load_problem_module(problem_module)
-
+def start_worker(worker_id, problem_module="user_app", extra_args=None):
+    # Load the appropriate problem module with optional feature flags
+    load_problem_module(problem_module, extra_args)
+    
     config = load_config()
     my_config = config['worker_nodes'][worker_id - 1]
     
-    # 1. Ξεκινάμε τον Server μας σε ΞΕΧΩΡΙΣΤΟ Thread
+    # 1. Start our Server in SEPARATE Thread
     server_thread = threading.Thread(
         target=start_worker_server, 
         args=(my_config['ip'], my_config['port']),
@@ -75,11 +83,11 @@ def start_worker(worker_id, problem_module="user_app"):
     print(f"[WORKER {worker_id}] Listening for peers on {my_config['port']}...")
     print(f"[WORKER {worker_id}] Connecting to Master...")
     
-    # 2. Σύνδεση στον Master
+    # 2. Connect to Master
     client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     client.connect((config['master_node']['ip'], config['master_node']['port']))
     
-    # Εγγραφή
+    # Register
     reg_msg = json.dumps({"type": "register", "worker_id": worker_id, "address": my_config})
     client.send(reg_msg.encode('utf-8'))
     
@@ -91,20 +99,15 @@ def start_worker(worker_id, problem_module="user_app"):
             buffer += chunk
             
             try:
-                # Προσπάθεια να διαβάσουμε JSON (μπορεί να είναι κολλημένα μηνύματα)
                 while "{" in buffer and "}" in buffer:
                     start = buffer.find("{")
-                    # Αυτό είναι απλοϊκό parsing για το παράδειγμα. 
-                    # Σε production θέλει μετρητή brackets.
-                    # Εδώ υποθέτουμε ότι το μήνυμα είναι έγκυρο JSON.
                     try:
                         msg = json.loads(buffer)
-                        # Αν πετύχει το load, καθαρίζουμε το buffer (επικίνδυνο αν υπάρχουν πολλά μηνύματα, αλλά ΟΚ για τώρα)
                         buffer = "" 
                     except:
-                        break # Περιμένουμε κι άλλα δεδομένα
+                        break
 
-                    # --- ENTOLEΣ MASTER ---
+                    # --- MASTER COMMANDS ---
                     
                     # A. MAP PHASE
                     if msg['type'] == 'map_task':
@@ -122,10 +125,10 @@ def start_worker(worker_id, problem_module="user_app"):
 
                     # B. SHUFFLE PHASE
                     elif msg['type'] == 'start_shuffle':
-                        all_workers = msg['workers'] # Λίστα με IPs/Ports όλων
+                        all_workers = msg['workers']
                         print(f"[WORKER {worker_id}] Starting SHUFFLE...")
                         
-                        # Φόρτωση των δικών μας map results
+                        # Load our map results
                         with open(f"map_results_{worker_id}.json", 'r') as f:
                             my_data = json.load(f)
                             
@@ -134,19 +137,18 @@ def start_worker(worker_id, problem_module="user_app"):
                         
                         for key, value in my_data:
                             # HASHING: hash("Pop") % 4 + 1 -> Worker 2
-                            # Χρησιμοποιούμε MD5 για σταθερό hash
                             hash_val = int(hashlib.md5(key.encode()).hexdigest(), 16)
                             target_id = (hash_val % len(all_workers)) + 1
                             buckets[target_id].append((key, value))
                             
-                        # Αποστολή στους άλλους
+                        # Send to others
                         for target_id, data_part in buckets.items():
                             if target_id == worker_id:
-                                # Αν είναι για εμάς, τα βάζουμε απευθείας στη λίστα
+                                # If for us, add directly to list
                                 with lock:
                                     incoming_shuffle_data.extend(data_part)
                             else:
-                                # Αν είναι για άλλον, σύνδεση και αποστολή
+                                # If for another, connect and send
                                 target_info = config['worker_nodes'][target_id - 1]
                                 try:
                                     p_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -191,13 +193,18 @@ def start_worker(worker_id, problem_module="user_app"):
             break
 
 if __name__ == "__main__":
-    # Usage: python worker.py <worker_id> [problem_module]
+    # Usage: python worker.py <worker_id> [problem_module] [--options]
     # Examples:
-    #   python worker.py 1                    -> runs with user_app (problem 1)
-    #   python worker.py 1 user_app           -> runs with user_app (problem 1)
-    #   python worker.py 1 user_app_problem2  -> runs with user_app_problem2 (problem 2)
-
+    #   python worker.py 1                              -> runs with user_app (problem 1)
+    #   python worker.py 1 user_app                     -> runs with user_app (problem 1)
+    #   python worker.py 1 user_app_problem2            -> runs with user_app_problem2 (problem 2)
+    #   python worker.py 1 user_app_problem2 --all      -> problem 2 with all features
+    #   python worker.py 1 user_app_problem2 --popularity --top-artists  -> specific features
+    
     worker_id = int(sys.argv[1])
-    problem_module = sys.argv[2] if len(sys.argv) > 2 else "user_app"
-
-    start_worker(worker_id, problem_module)
+    problem_module = sys.argv[2] if len(sys.argv) > 2 and not sys.argv[2].startswith('--') else "user_app"
+    
+    # Collect extra arguments (--flags)
+    extra_args = [arg for arg in sys.argv[2:] if arg.startswith('--')]
+    
+    start_worker(worker_id, problem_module, extra_args)
