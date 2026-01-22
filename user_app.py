@@ -1,106 +1,107 @@
 import csv
 import io
 
+# ==========================================
+# ⚙️ CONFIGURATION (ΟΙ ΠΑΡΑΜΕΤΡΟΙ ΤΟΥ ΚΑΘΗΓΗΤΗ)
+# ==========================================
+
+# "Begging and end year... for filtering"
+FILTER_START_YEAR = 1990  
+FILTER_END_YEAR = 2023    
+
+# "Parameters for specifying details... Intervals"
+INTERVAL_SIZE = 5         # Π.χ. 5 για πενταετίες, 10 για δεκαετίες
+
+# "Shifting the beginning... +-1"
+INTERVAL_OFFSET = 0       # Π.χ. 0 για 2000-2004, 1 για 2001-2005
+# ==========================================
+
+def get_interval_key(year):
+    """Υπολογίζει δυναμικά το διάστημα με βάση το Size και το Offset"""
+    shifted_year = year - INTERVAL_OFFSET
+    interval_start = (shifted_year // INTERVAL_SIZE) * INTERVAL_SIZE + INTERVAL_OFFSET
+    interval_end = interval_start + INTERVAL_SIZE - 1
+    return f"{interval_start}-{interval_end}"
+
 # --- 1. MAP FUNCTION ---
 def map_function(document_line):
-    """
-    Input: Μια γραμμή CSV (string)
-    Output: Μια λίστα από (Key, Value) tuples
-    """
     try:
-        # Χρησιμοποιούμε το csv module για σωστό διάβασμα (χειρίζεται τα quotes "")
         f = io.StringIO(document_line)
         reader = csv.reader(f, delimiter=',')
         row = next(reader)
 
-        # Βάσει του αρχείου dataset.csv που ανέβασες:
-        # Index 2: Artists
-        # Index 6: Duration_ms
-        # Index 20: Track Genre (Το Κλειδί μας)
+        # Έλεγχος για το dataset με τις 18 στήλες
+        if len(row) < 18: return []
+        if row[2] == 'duration_ms': return [] # Skip Header
+
+        # Indexes: 0=Artist, 2=Duration, 4=Year, 17=Genre
+        artist_name = row[0]
         
-        if len(row) < 21: # Έλεγχος αν η γραμμή είναι ελλιπής
+        try:
+            duration_ms = int(row[2])
+            year = int(row[4])
+        except ValueError:
+            return [] 
+
+        # --- ΥΛΟΠΟΙΗΣΗ ΦΙΛΤΡΟΥ ---
+        if year < FILTER_START_YEAR or year > FILTER_END_YEAR:
             return []
 
-        # Αγνοούμε την επικεφαλίδα αν πέσουμε πάνω της
-        if row[6] == 'duration_ms':
-            return []
+        # --- ΥΛΟΠΟΙΗΣΗ INTERVAL/SHIFTING ---
+        key = get_interval_key(year)
 
-        artist_name = row[2]
-        duration_ms = int(row[6])
-        genre = row[20] # Αυτό είναι το Κλειδί μας πλέον
-
-        # Φτιάχνουμε το Value Object
         value_data = {
             "duration": duration_ms,
-            "artist": artist_name
+            "artist": artist_name,
+            "original_year": year, # Κρατάμε τη χρονιά για να φτιάξουμε τη λίστα μετά
+            "genre": row[17]
         }
         
-        # Επιστρέφουμε: Key -> Genre, Value -> {duration, artist}
-        return [(genre, value_data)]
+        return [(key, value_data)]
         
     except Exception as e:
-        # Αν υπάρξει λάθος (π.χ. χαλασμένη γραμμή), την αγνοούμε
         return []
 
 # --- 2. REDUCE FUNCTION ---
 def reduce_function(key, values_list):
-    """
-    Input: 
-      key: Το είδος μουσικής (π.χ. "pop", "rock")
-      values_list: Λίστα με dictionaries
-    Output: 
-      Στατιστικά για αυτό το είδος
-    """
     total_duration = 0
     count = 0
     artist_counts = {} 
     
+    # "List of the years" -> Εδώ μαζεύουμε ποιες χρονιές βρήκαμε
+    years_found = set()
+    
     for item in values_list:
-        # 1. Άθροισμα διάρκειας
         total_duration += item['duration']
         count += 1
         
-        # 2. Καταμέτρηση καλλιτεχνών για να βρούμε τον πιο δημοφιλή
+        # Καταμέτρηση καλλιτέχνη
         art = item['artist']
-        if art in artist_counts:
-            artist_counts[art] += 1
-        else:
-            artist_counts[art] = 1
+        artist_counts[art] = artist_counts.get(art, 0) + 1
+        
+        # Προσθήκη χρονιάς στη λίστα
+        if 'original_year' in item:
+            years_found.add(item['original_year'])
             
-    if count == 0:
-        return None
+    if count == 0: return None
 
     # Υπολογισμοί
-    avg_duration_ms = total_duration / count
-    avg_duration_min = avg_duration_ms / 60000 # Μετατροπή ms σε λεπτά
-    
-    # Εύρεση του καλλιτέχνη με τα περισσότερα τραγούδια στο είδος
+    avg_duration_min = (total_duration / count) / 60000 
     top_artist = max(artist_counts, key=artist_counts.get)
     
-    result = {
-        "genre": key,
+    # Ταξινομούμε τη λίστα ετών για να είναι ευανάγνωστη
+    sorted_years = sorted(list(years_found))
+
+    return {
+        "interval": key,
+        "years_included": sorted_years, # <--- ΕΔΩ ΕΙΝΑΙ Η ΛΙΣΤΑ ΠΟΥ ΖΗΤΗΣΕ
         "avg_duration_minutes": round(avg_duration_min, 2),
         "top_artist": top_artist,
-        "total_tracks_processed": count
+        "total_tracks": count
     }
-    
-    return result
 
-# --- TESTING (Τρέξε το για να δεις αν δουλεύει) ---
+# --- TESTING ---
 if __name__ == "__main__":
-    print("--- Testing Map Function ---")
-    # Μια πραγματική γραμμή από το αρχείο σου (Gen Hoshino - Comedy)
-    sample_line = '0,5SuOikwiRyPMVoIQDJUgSV,Gen Hoshino,Comedy,Comedy,73,230666,False,0.676,0.461,1,-6.746,0,0.143,0.0322,1.01e-06,0.358,0.715,87.917,4,acoustic'
-    
-    mapped = map_function(sample_line)
-    print(f"Mapped Result: {mapped}")
-    
-    print("\n--- Testing Reduce Function ---")
-    # Ψεύτικα δεδομένα για τεστ
-    sample_values = [
-        {"duration": 230000, "artist": "Gen Hoshino"},
-        {"duration": 150000, "artist": "Ben Woodward"},
-        {"duration": 240000, "artist": "Gen Hoshino"}
-    ]
-    reduced = reduce_function("acoustic", sample_values)
-    print(f"Reduced Result: {reduced}")
+    print(f"--- Configuration: {INTERVAL_SIZE}-year intervals, Offset: {INTERVAL_OFFSET} ---")
+    line = 'Britney Spears,Song,200000,False,2002,80,0.5,0.5,1,-5,0,0.05,0.3,0,0.3,0.9,95,pop'
+    print(f"Mapped: {map_function(line)}")
