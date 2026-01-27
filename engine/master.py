@@ -1,4 +1,3 @@
-# engine/master.py
 import socket
 import threading
 import json
@@ -10,7 +9,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from utils import load_config
 
 connected_workers = {} 
-worker_status = {} # Παρακολουθεί τι κάνει ο κάθε worker: 'IDLE', 'MAPPING', 'MAP_DONE', 'SHUFFLING', etc.
+worker_status = {}
 lock = threading.Lock()
 
 def handle_worker(conn, addr):
@@ -52,11 +51,10 @@ def orchestrate_job():
     # 1. Start Mapping
     input("Press Enter to start MAP PHASE > ")
     
-    # ... (Κώδικας ανάγνωσης αρχείου ίδιος με πριν) ...
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     data_path = os.path.join(base_dir, 'data', 'dataset.csv')
     with open(data_path, 'r', encoding='utf-8') as f:
-        lines = f.readlines()[1:] # Skip header
+        lines = f.readlines()[1:]
         
     worker_ids = list(connected_workers.keys())
     chunks = {wid: [] for wid in worker_ids}
@@ -80,8 +78,6 @@ def orchestrate_job():
     
     # 2. Start Shuffle
     input("Press Enter to start SHUFFLE PHASE > ")
-    
-    # Στέλνουμε τη λίστα με όλους τους workers για να ξέρουν πού να συνδεθούν
     all_workers_list = config['worker_nodes']
     shuffle_msg = json.dumps({"type": "start_shuffle", "workers": all_workers_list})
     

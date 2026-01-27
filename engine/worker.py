@@ -1,4 +1,3 @@
-# engine/worker.py
 import socket
 import threading
 import json
@@ -10,31 +9,24 @@ import importlib
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from utils import load_config
 
-# Dynamic import based on problem selection
-# Default to problem 1 (teammate's), can be overridden via CLI
-PROBLEM_MODULE = "user_app"  # Default
+PROBLEM_MODULE = "user_app"
 
 def load_problem_module(problem_name, extra_args=None):
-    """Dynamically load map/reduce functions from specified module"""
+    """Load map/reduce functions from specified module"""
     global map_function, reduce_function
     module = importlib.import_module(problem_name)
-    
     print(f"[WORKER] Extra args received: {extra_args}")
-    
-    # If module has configure_features function, call it with extra args
     if hasattr(module, 'configure_features'):
         module.configure_features(extra_args if extra_args else [])
-    
     map_function = module.map_function
     reduce_function = module.reduce_function
     print(f"[WORKER] Loaded problem module: {problem_name}")
 
-# Global list to collect shuffled data from other workers
 incoming_shuffle_data = []
 lock = threading.Lock()
 
 def handle_peer_connection(conn, addr):
-    """Receives data from OTHER Worker (P2P)"""
+    """Receive data from other workers"""
     print(f"[WORKER SERVER] Receiving data from peer {addr}")
     buffer = ""
     try:
@@ -55,7 +47,7 @@ def handle_peer_connection(conn, addr):
         conn.close()
 
 def start_worker_server(my_ip, my_port):
-    """Opens port to listen for other Workers"""
+    """Listen for incoming worker connections"""
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server.bind((my_ip, my_port))
     server.listen()
@@ -66,13 +58,10 @@ def start_worker_server(my_ip, my_port):
         t.start()
 
 def start_worker(worker_id, problem_module="user_app", extra_args=None):
-    # Load the appropriate problem module with optional feature flags
     load_problem_module(problem_module, extra_args)
-    
     config = load_config()
     my_config = config['worker_nodes'][worker_id - 1]
     
-    # 1. Start our Server in SEPARATE Thread
     server_thread = threading.Thread(
         target=start_worker_server, 
         args=(my_config['ip'], my_config['port']),
@@ -82,12 +71,8 @@ def start_worker(worker_id, problem_module="user_app", extra_args=None):
     
     print(f"[WORKER {worker_id}] Listening for peers on {my_config['port']}...")
     print(f"[WORKER {worker_id}] Connecting to Master...")
-    
-    # 2. Connect to Master
     client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     client.connect((config['master_node']['ip'], config['master_node']['port']))
-    
-    # Register
     reg_msg = json.dumps({"type": "register", "worker_id": worker_id, "address": my_config})
     client.send(reg_msg.encode('utf-8'))
     
@@ -107,9 +92,6 @@ def start_worker(worker_id, problem_module="user_app", extra_args=None):
                     except:
                         break
 
-                    # --- MASTER COMMANDS ---
-                    
-                    # A. MAP PHASE
                     if msg['type'] == 'map_task':
                         data_lines = msg['data']
                         print(f"[WORKER {worker_id}] Starting MAP on {len(data_lines)} lines...")
@@ -122,29 +104,19 @@ def start_worker(worker_id, problem_module="user_app", extra_args=None):
                             json.dump(map_results, f)
                         
                         client.send(json.dumps({"type": "map_done", "worker_id": worker_id}).encode('utf-8'))
-
-                    # B. SHUFFLE PHASE
                     elif msg['type'] == 'start_shuffle':
                         all_workers = msg['workers']
                         print(f"[WORKER {worker_id}] Starting SHUFFLE...")
                         
-                        # Load our map results
                         with open(f"map_results_{worker_id}.json", 'r') as f:
                             my_data = json.load(f)
-                            
-                        # Partitioning (Bucket Sort)
                         buckets = {wid: [] for wid in range(1, len(all_workers) + 1)}
-                        
                         for key, value in my_data:
-                            # HASHING: hash("Pop") % 4 + 1 -> Worker 2
                             hash_val = int(hashlib.md5(key.encode()).hexdigest(), 16)
                             target_id = (hash_val % len(all_workers)) + 1
                             buckets[target_id].append((key, value))
-                            
-                        # Send to others
                         for target_id, data_part in buckets.items():
                             if target_id == worker_id:
-                                # If for us, add directly to list
                                 with lock:
                                     incoming_shuffle_data.extend(data_part)
                             else:
