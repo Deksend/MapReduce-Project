@@ -18,16 +18,15 @@ def map_function(document_line):
         # Index 6: Duration_ms
         # Index 20: Track Genre (Το Κλειδί μας)
         
-        if len(row) < 21: # Έλεγχος αν η γραμμή είναι ελλιπής
-            return []
+        # if len(row) < 21: # Έλεγχος αν η γραμμή είναι ελλιπής
+        #     return []
 
-        # Αγνοούμε την επικεφαλίδα αν πέσουμε πάνω της
-        if row[6] == 'duration_ms':
+        # NEW (correct):
+        if row[2] == 'duration_ms':
             return []
-
-        artist_name = row[2]
-        duration_ms = int(row[6])
-        genre = row[20] # Αυτό είναι το Κλειδί μας πλέον
+        artist_name = row[0]
+        duration_ms = int(row[2])
+        genre = row[17]
 
         # Φτιάχνουμε το Value Object
         value_data = {
