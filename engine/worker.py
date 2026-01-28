@@ -94,6 +94,7 @@ def start_worker(worker_id, problem_module="user_app", extra_args=None):
 
                     if msg['type'] == 'map_task':
                         data_lines = msg['data']
+                        print(data_lines)
                         print(f"[WORKER {worker_id}] Starting MAP on {len(data_lines)} lines...")
                         map_results = []
                         for line in data_lines:

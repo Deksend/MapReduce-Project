@@ -53,16 +53,16 @@ def map_function(document_line):
         reader = csv.reader(f, delimiter=',')
         row = next(reader)
 
-        if len(row) < 21:
-            return []
+        # if len(row) < 21:
+        #     return []
 
         # Skip header row
-        if row[7] == 'explicit':
+        if row[3] == 'explicit':
             return []
 
         # Extract required fields
-        genre = row[20].strip()
-        explicit_str = row[7].strip()
+        genre = row[17].strip()
+        explicit_str = row[3].strip()
         explicit_flag = 1 if explicit_str.lower() == 'true' else 0
 
         # Base value data
@@ -74,7 +74,7 @@ def map_function(document_line):
         # --- OPTIONAL: Popularity analysis ---
         if POPULARITY_ENABLED:
             try:
-                popularity = int(row[5])
+                popularity = int(row[6])
                 if explicit_flag:
                     value_data["explicit_popularity_sum"] = popularity
                     value_data["explicit_popularity_count"] = 1
