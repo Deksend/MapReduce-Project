@@ -18,8 +18,8 @@ def map_function(document_line):
         # Index 6: Duration_ms
         # Index 20: Track Genre (Το Κλειδί μας)
         
-        if len(row) < 21: # Έλεγχος αν η γραμμή είναι ελλιπής
-            return []
+        #if len(row) < 21: # Έλεγχος αν η γραμμή είναι ελλιπής
+         #   return []
 
         # Αγνοούμε την επικεφαλίδα αν πέσουμε πάνω της
         if row[6] == 'duration_ms':
